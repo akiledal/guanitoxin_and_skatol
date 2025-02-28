@@ -1,6 +1,7 @@
 ---
-title: "R Notebook"
+title: "Guanitoxin and Skatol Biosynthesis Genes"
 output: html_notebook
+author: Anders Kiledal
 ---
 
 ```{r setup, include=FALSE}
