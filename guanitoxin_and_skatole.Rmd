@@ -1,0 +1,82 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here("~/GLAMR/"))
+library(tidyverse)
+library(dada2)
+library(patchwork)
+library(ggtree)
+
+pg <- DBI::dbConnect(RPostgres::Postgres(),dbname = "glamr_data", host = "localhost", port = "5432", user = "glamr_admin", password = "glamr2023")
+```
+
+Finding guanitoxin and skatole genes in GLAMR assemblies
+```{r include=FALSE}
+skatole_fasta <- Biostrings::readDNAStringSet("~/GLAMR/data/reference/blast_queries/skatole.fasta") %>% 
+  data.frame(seq = ., seqname = names(.)) %>% 
+  mutate(seqlen = nchar(seq))
+  
+guanitoxin_fasta <- Biostrings::readDNAStringSet("~/GLAMR/data/reference/blast_queries/guanitoxin.fasta") %>% 
+  data.frame(seq = ., seqname = names(.)) %>% 
+  mutate(seqlen = nchar(seq))
+
+seq_lens <- bind_rows(skatole_fasta, guanitoxin_fasta) %>% 
+  select(-seq)
+
+contig_blast_pg <-tbl(pg, "contig_blast")
+contig_tax_pg <-tbl(pg, "contig_lca_uniref")
+tax_info_pg <-tbl(pg, "tax_info")
+contig_abund_pg <-tbl(pg, "contig_abund")
+contig_bins_pg <-tbl(pg, "contig_bin_membership")
+bin_summary_pg <-tbl(pg, "bin_summary")
+glamr_samples_pg <-tbl(pg, "glamr_samples")
+  
+contig_blast_res <- contig_blast_pg %>% 
+  filter(search_name %in% c("guanitoxin", "skatole"),
+         e_value < 1e-03) %>% 
+  rename(contig = "subject") %>% 
+  left_join(contig_tax_pg %>% select(contig, tax_id = "taxonomy")) %>% 
+  left_join(tax_info_pg) %>% 
+  left_join(contig_abund_pg %>% select(contig, tpm)) %>% 
+  collect() %>% 
+  left_join(seq_lens %>% rename(query = "seqname")) %>% 
+  mutate(query_coverage = (alignment_length / seqlen)*100)
+
+
+bins <- contig_bins_pg %>% 
+  filter(contig %in% local(contig_blast_res$contig)) %>% 
+  left_join(bin_summary_pg) %>% 
+  collect()
+
+med_qual_bins <- bins %>% 
+  filter(Completeness > 20,
+         Contamination < 50,
+         !is.na(classification)) %>% 
+  distinct() %>% 
+  mutate(score = Completeness - 5 * Contamination + Contamination*(`Strain heterogeneity`/100)) %>% 
+  group_by(contig) %>% slice_max(score, n = 1) %>% 
+  mutate(bin_info = str_glue("Bin: {bin}, \ncompleteness= {Completeness}, contamination = {Contamination}, \n{classification}"))
+
+```
+
+
+```{r echo=FALSE}
+(contig_blast_res %>%
+   filter(!str_detect(sample, "^GVHD")) %>%
+   left_join(med_qual_bins %>% select(contig, bin_info)) %>% 
+   left_join(glamr_samples_pg %>% collect() %>% rename(sample = "SampleID")) %>%
+   rename(contig_taxonomy = "tax_name") %>% 
+  ggplot(aes(query_coverage, percent_id * 100, color = log10(tpm), tpm = tpm, contig = contig, gene = query, sample = sample, contig_taxonomy = contig_taxonomy, bin_info = bin_info, date = date, lat = lat, lon = lon)) +
+  geom_point() + 
+  theme_bw() +
+   scale_color_viridis_c() +
+  facet_grid(~search_name) +
+   labs(y = "% ID", x = "Query coverage", color = "Contig abundance\nlog10(tpm)")
+) %>% plotly::ggplotly()
+```
+
+
+
