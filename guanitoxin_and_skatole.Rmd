@@ -63,7 +63,7 @@ med_qual_bins <- bins %>%
 ```
 
 
-```{r echo=FALSE, fig.height=4, fig.width=6}
+```{r echo=FALSE, fig.height=4, fig.width=8}
 (contig_blast_res %>%
    filter(!str_detect(sample, "^GVHD")) %>%
    left_join(med_qual_bins %>% select(contig, bin_info)) %>% 
