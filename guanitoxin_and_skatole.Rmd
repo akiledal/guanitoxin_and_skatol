@@ -64,7 +64,7 @@ med_qual_bins <- bins %>%
 ```
 
 ## Guanitoxin
-```{r echo=FALSE, fig.height=8, fig.width=16}
+```{r echo=FALSE, fig.height=8, fig.width=16, message=FALSE, warning=FALSE}
 (contig_blast_res %>%
    filter(!str_detect(sample, "^GVHD")) %>%
    left_join(med_qual_bins %>% select(contig, bin_info)) %>% 
@@ -84,7 +84,7 @@ med_qual_bins <- bins %>%
 ```
 
 ## Skatole
-```{r}
+```{r echo=FALSE, fig.height=8, fig.width=16, message=FALSE, warning=FALSE}
 (contig_blast_res %>%
    filter(!str_detect(sample, "^GVHD")) %>%
    left_join(med_qual_bins %>% select(contig, bin_info)) %>% 
